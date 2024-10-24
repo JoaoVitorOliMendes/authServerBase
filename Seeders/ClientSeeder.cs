@@ -45,7 +45,9 @@ namespace authserver.Seeders
                         Permissions.GrantTypes.AuthorizationCode,
                         Permissions.GrantTypes.RefreshToken,
 
-                        Permissions.Prefixes.Scope + "api",
+                        Permissions.Scopes.Roles,
+                        Permissions.Scopes.Email,
+                        Permissions.Scopes.Profile,
 
                         Permissions.ResponseTypes.Code
                     }

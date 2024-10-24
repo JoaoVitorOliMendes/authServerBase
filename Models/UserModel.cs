@@ -19,5 +19,10 @@ namespace authserver.Models
         [BsonElement("EmailConfirmed")]
         public bool EmailConfirmed { get; set; }
 
+        [BsonElement("Salt")]
+        public string Salt { get; set; }
+        [BsonElement("CreationDate")]
+        public DateTime CreationDate { get; set; }
+
     }
 }

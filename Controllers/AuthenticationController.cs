@@ -5,6 +5,11 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using authserver.Models;
 using authserver.Services;
+using authserver.Util;
+using System.Text;
+using DnsClient;
+using static OpenIddict.Abstractions.OpenIddictConstants;
+using System.Collections.Immutable;
 
 namespace authserver.Controllers
 {
@@ -22,34 +27,51 @@ namespace authserver.Controllers
         [AllowAnonymous]
         public async Task<IActionResult> Login([FromBody] LoginModel login)
         {
-            Console.WriteLine(login.ToString());
             var user = _userService.GetUserByEmail(login.Username);
 
             if (user == null)
             {
-                return Unauthorized();
+                return Unauthorized("Incorrect Credentials");
             }
 
-            // TODO: Password Validation
+            string storedHashedPassword = user.Password;
+            string storedSalt = user.Salt;
+            byte[] storedSaltBytes = Convert.FromBase64String(storedSalt);
+            Console.WriteLine(storedSaltBytes);
+            string enteredPassword = login.Password;
 
-            var claims = new List<Claim>
+            byte[] enteredPasswordBytes = Encoding.UTF8.GetBytes(enteredPassword);
+
+            byte[] saltedPassword = new byte[enteredPasswordBytes.Length + storedSaltBytes.Length];
+            Buffer.BlockCopy(enteredPasswordBytes, 0, saltedPassword, 0, enteredPasswordBytes.Length);
+            Buffer.BlockCopy(storedSaltBytes, 0, saltedPassword, enteredPasswordBytes.Length, storedSaltBytes.Length);
+
+            string enteredPasswordHash = HashingUtils.HashPassword(enteredPassword, storedSaltBytes);
+
+            if (enteredPasswordHash == storedHashedPassword)
             {
-                new Claim(ClaimTypes.Name, login.Username)
-            };
+                var claims = new List<Claim>
+                {
+                    new Claim(Claims.Name, login.Username),
+                    new Claim(Claims.Subject, user.Email),
+                    new Claim(Claims.Email, user.Email),
+                    new Claim(Claims.Role, String.Join(" ", new List<string> { "user", "admin" }.ToImmutableArray()))
+                };
 
-            var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-            var authProperties = new AuthenticationProperties
+                var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+                var authProperties = new AuthenticationProperties
+                {
+
+                };
+
+                await HttpContext.SignInAsync(new ClaimsPrincipal(claimsIdentity));
+                return Ok(new { success = true });
+            }
+            else
             {
-                // Set additional authentication properties if needed
-            };
+                return Unauthorized("Incorrect Credentials");
+            }
 
-            await HttpContext.SignInAsync(new ClaimsPrincipal(claimsIdentity));
-            //if (Url.IsLocalUrl(login.ReturnUrl))
-            //{
-            //    return Redirect(login.ReturnUrl);
-            //}
-
-            return Ok(new { success = true });
         }
 
         [HttpGet("~/api/logout")]
@@ -63,6 +85,24 @@ namespace authserver.Controllers
         [AllowAnonymous]
         public IActionResult Register([FromBody] UserModel user)
         {
+            var userDb = _userService.GetUserByEmail(user.Email);
+
+            if (userDb != null)
+            {
+                return Unauthorized("User already exists");
+            }
+
+            byte[] saltBytes = HashingUtils.GenerateSalt();
+            // Hash the password with the salt
+            string hashedPassword = HashingUtils.HashPassword(user.Password, saltBytes);
+            string base64Salt = Convert.ToBase64String(saltBytes);
+
+            //string retrievedSaltBytes = Convert.FromBase64String(base64Salt);
+
+            user.Password = hashedPassword;
+            user.Salt = base64Salt;
+            Console.WriteLine(base64Salt);
+            user.CreationDate = DateTime.Now;
             try
             {
                 if (_userService.CreateUser(user))

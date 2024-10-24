@@ -2,6 +2,8 @@ using authserver.Seeders;
 using authserver.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using static OpenIddict.Abstractions.OpenIddictConstants;
 
 //https://legimenes.medium.com/authorization-server-with-openiddict-the-serie-e2721d0451af
 //https://documentation.openiddict.com/guides/getting-started/creating-your-own-server-instance
@@ -34,27 +36,22 @@ builder.Services.AddOpenIddict()
             .SetTokenEndpointUris("/api/connect/token")
             .SetUserinfoEndpointUris("/api/connect/userinfo");
 
+        options.AddEncryptionKey(new SymmetricSecurityKey(
+            Convert.FromBase64String("DRjd/GnduI3Efzen9V9BvbNUfc/VKgXltV7Kbk9sMkY=")));
+
+        options.RegisterScopes(Scopes.Email, Scopes.Profile, Scopes.Roles);
         //secret registration
-        options.AddDevelopmentEncryptionCertificate()
-            .AddDevelopmentSigningCertificate();
-
-        // Encryption and signing of tokens
         options
-            .AddEphemeralEncryptionKey()
-            .AddEphemeralSigningKey()
-            .DisableAccessTokenEncryption();
-
-        options.RegisterScopes("api");
+            .AddDevelopmentEncryptionCertificate()
+            .AddDevelopmentSigningCertificate()
+            ;
 
         options.UseAspNetCore()
             .EnableAuthorizationEndpointPassthrough()
             .EnableTokenEndpointPassthrough()
             .EnableUserinfoEndpointPassthrough()
-            //.EnableVerificationEndpointPassthrough()
-            //.EnableLogoutEndpointPassthrough()
-            //.EnableStatusCodePagesIntegration()
+            .EnableLogoutEndpointPassthrough()
             ;
-        //options.IgnoreScopePermissions();
     })
     .AddValidation(options =>
     {
@@ -94,7 +91,10 @@ builder.Services.AddCors(options =>
         });
 });
 
-builder.Services.AddControllers();
+builder.Services.AddControllers(options =>
+{
+    options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
+});
 
 
 builder.Services.AddSwaggerGen();
