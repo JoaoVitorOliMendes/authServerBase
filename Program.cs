@@ -34,7 +34,8 @@ builder.Services.AddOpenIddict()
         options
             .SetAuthorizationEndpointUris("/api/connect/authorize")
             .SetTokenEndpointUris("/api/connect/token")
-            .SetUserinfoEndpointUris("/api/connect/userinfo");
+            .SetUserinfoEndpointUris("/api/connect/userinfo")
+            .SetLogoutEndpointUris("/api/connect/logout");
 
         options.AddEncryptionKey(new SymmetricSecurityKey(
             Convert.FromBase64String("DRjd/GnduI3Efzen9V9BvbNUfc/VKgXltV7Kbk9sMkY=")));
@@ -66,11 +67,11 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
     .AddCookie(options =>
     {
         options.Cookie.Name = "auth";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = SameSiteMode.Strict;
         options.ExpireTimeSpan = TimeSpan.FromMinutes(30); // access duration for particular cookie
-        //options.LoginPath = "/api/login"; // Specify your login path
-        //options.AccessDeniedPath = "/api/access-denied"; // Specify your access denied
-        options.LoginPath = null;
-        options.LogoutPath = null;
+        options.LoginPath = "/api/login"; // Redirect for unauthorized requests
+        //options.AccessDeniedPath = "/account/accessdenied";
         options.Events.OnRedirectToLogin = context =>
         {
             context.Response.StatusCode = 401;
@@ -81,13 +82,14 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 builder.Services.AddHostedService<ClientSeeder>();
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll",
+    options.AddPolicy("AllowSpecificOrigins",
         builder =>
         {
             builder
-            .AllowAnyOrigin()
+            .WithOrigins("http://localhost:3000")
             .AllowAnyMethod()
-            .AllowAnyHeader();
+            .AllowAnyHeader()
+            .AllowCredentials();
         });
 });
 
@@ -104,7 +106,7 @@ builder.Services.AddScoped<UserService>();
 var app = builder.Build();
 app.UseDeveloperExceptionPage();
 
-app.UseCors("AllowAll");
+app.UseCors("AllowSpecificOrigins");
 
 app.UseSwagger();
 app.UseSwaggerUI();

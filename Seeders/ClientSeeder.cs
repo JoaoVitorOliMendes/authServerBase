@@ -36,11 +36,13 @@ namespace authserver.Seeders
                     ClientId = "postman",
                     ClientSecret = "postman-secret",
                     DisplayName = "Postman",
-                    RedirectUris = { new Uri("https://oauth.pstmn.io/v1/browser-callback") },
+                    RedirectUris = { new Uri("https://oauth.pstmn.io/v1/browser-callback"), new Uri("http://localhost:3000/auth/openiddict") },
+                    PostLogoutRedirectUris = { new Uri("http://localhost:3000/")},
                     Permissions =
                     {
                         Permissions.Endpoints.Authorization,
                         Permissions.Endpoints.Token,
+                        Permissions.Endpoints.Logout,
 
                         Permissions.GrantTypes.AuthorizationCode,
                         Permissions.GrantTypes.RefreshToken,

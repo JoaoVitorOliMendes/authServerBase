@@ -17,9 +17,11 @@ using System.Security.Principal;
 using XAct.Users;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Amazon.Auth.AccessControlPolicy;
+using System.Net;
 
 namespace authserver.Controllers
 {
+    [Route("api")]
     [ApiController]
     public class AuthorizationController : Controller
     {
@@ -33,68 +35,28 @@ namespace authserver.Controllers
             _authorizationManager = authorizationManager;
         }
 
-        [HttpPost("~/api/connect/token"), Produces("application/json")]
-        public async Task<IResult> Exchange()
+        [HttpPost("connect/token"), Produces("application/json")]
+        public async Task<IActionResult> Exchange()
         {
             OpenIddictRequest? request = HttpContext.GetOpenIddictServerRequest() ??
             throw new InvalidOperationException("The OpenID Connect request cannot be retrieved.");
 
-            ClaimsPrincipal principal;
-            AuthenticateResult result = await HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
 
-            var userEmail = result.Principal.GetClaim(Claims.Subject);
-            var userName = result.Principal.GetClaim(Claims.Name);
-            var userRoles = result.Principal.GetClaim(Claims.Role);
+            ClaimsPrincipal claimsPrincipal;
+            claimsPrincipal = (await HttpContext.AuthenticateAsync(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme)).Principal;
 
-            var identity = new ClaimsIdentity(
-                 result.Principal.Claims,
-                 authenticationType: TokenValidationParameters.DefaultAuthenticationType,
-                 nameType: Claims.Name,
-                 roleType: Claims.Role
-            );
-
-            identity.SetClaim(Claims.Subject, userEmail)
-                     .SetClaim(Claims.Email, userEmail)
-                     .SetClaim(Claims.Name, userName)
-                     .SetClaims(Claims.Role, userRoles.Split(" ").ToImmutableArray());
-
-            var claimsPrincipal = new ClaimsPrincipal(identity);
-            claimsPrincipal.SetScopes(request.GetScopes());
-            claimsPrincipal.SetResources(await _scopeManager.ListResourcesAsync(claimsPrincipal.GetScopes()).ToListAsync());
-            claimsPrincipal.SetDestinations(static claim => claim.Type switch
-            {
-                // If the "profile" scope was granted, allow the "name" claim to be
-                // added to the access and identity tokens derived from the principal.
-                Claims.Name when claim.Subject.HasScope(Scopes.Profile) =>
-                [
-                    OpenIddictConstants.Destinations.AccessToken,
-                    OpenIddictConstants.Destinations.IdentityToken
-                ],
-                Claims.Email when claim.Subject.HasScope(Scopes.Profile) =>
-                [
-                    OpenIddictConstants.Destinations.AccessToken,
-                    OpenIddictConstants.Destinations.IdentityToken
-                ],
-                Claims.Role when claim.Subject.HasScope(Scopes.Profile) =>
-                [
-                    OpenIddictConstants.Destinations.AccessToken,
-                    OpenIddictConstants.Destinations.IdentityToken
-                ],
-                // Otherwise, add the claim to the access tokens only.
-                _ => [OpenIddictConstants.Destinations.AccessToken]
-            });
-
-            return Results.SignIn(claimsPrincipal, authenticationScheme: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+            return SignIn(claimsPrincipal, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         }
 
-        [HttpPost("~/api/connect/authorize")]
-        [HttpGet("~/api/connect/authorize")]
+        [HttpPost("connect/authorize")]
+        [HttpGet("connect/authorize")]
         public async Task<IActionResult> Authorize()
         {
             OpenIddictRequest? request = HttpContext.GetOpenIddictServerRequest() ??
                             throw new InvalidOperationException("The OpenID Connect request cannot be retrieved.");
 
             AuthenticateResult result = await HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            Console.WriteLine(result.Succeeded);
             if (!result.Succeeded)
             {
                 return Challenge(
@@ -110,6 +72,9 @@ namespace authserver.Controllers
             var userName = result.Principal.GetClaim(Claims.Name);
             var userRoles = result.Principal.GetClaim(Claims.Role);
 
+            Console.WriteLine(userEmail);
+            Console.WriteLine(userName);
+            Console.WriteLine(userRoles);
 
             var claimsIdentity = new ClaimsIdentity(
                 authenticationType: TokenValidationParameters.DefaultAuthenticationType,
@@ -120,7 +85,7 @@ namespace authserver.Controllers
             claimsIdentity.SetClaim(Claims.Subject, userEmail)
                      .SetClaim(Claims.Email, userEmail)
                      .SetClaim(Claims.Name, userName)
-                     .SetClaims(Claims.Role, userRoles.Split(" ").ToImmutableArray());
+                     .SetClaims(Claims.Role, userRoles.Split(" ").ToImmutableArray()); ;
 
             // Set requested scopes (this is not done automatically)
             claimsIdentity.SetResources(await _scopeManager.ListResourcesAsync(claimsIdentity.GetScopes()).ToListAsync());
@@ -149,21 +114,43 @@ namespace authserver.Controllers
                 // Otherwise, add the claim to the access tokens only.
                 _ => [OpenIddictConstants.Destinations.AccessToken]
             });
+            Console.WriteLine("END AUTHORIZEEE");
             return SignIn(claimsPrincipal, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         }
 
         [Authorize(AuthenticationSchemes = OpenIddictServerAspNetCoreDefaults.AuthenticationScheme)]
-        [HttpGet("~/api/connect/userinfo")]
+        [HttpGet("connect/userinfo")]
         public async Task<IActionResult> Userinfo()
         {
             var claimsPrincipal = (await HttpContext.AuthenticateAsync(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme)).Principal;
-
+            foreach (var claim in claimsPrincipal.Claims)
+            {
+                Console.WriteLine($"Claim Type: {claim.Type}, Claim Value: {claim.Value}");
+            }
             return Ok(new
             {
+                Sub = claimsPrincipal.GetClaim(Claims.Subject),
                 Name = claimsPrincipal.GetClaim(Claims.Name),
-                Roles = claimsPrincipal.GetClaim(Claims.Role).Split(" ").ToImmutableArray(),
+                Roles = claimsPrincipal.GetClaims(Claims.Role).ToString(),
                 Email = claimsPrincipal.GetClaim(Claims.Email)
             });
         }
+
+
+        [HttpGet("connect/logout")]
+        [HttpPost("connect/logout")]
+        public async Task<IActionResult> LogoutPost()
+        {
+            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+
+            return SignOut(
+                  authenticationSchemes: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme,
+                  properties: new AuthenticationProperties
+                  {
+                      RedirectUri = "/"
+                  });
+        }
+
+
     }
 }

@@ -10,9 +10,11 @@ using System.Text;
 using DnsClient;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 using System.Collections.Immutable;
+using XAct.Messages;
 
 namespace authserver.Controllers
 {
+    [Route("api")]
     [ApiController]
     public class AuthenticationController : Controller
     {
@@ -23,7 +25,7 @@ namespace authserver.Controllers
             _userService = userService;
         }
 
-        [HttpPost("~/api/login")]
+        [HttpPost("login")]
         [AllowAnonymous]
         public async Task<IActionResult> Login([FromBody] LoginModel login)
         {
@@ -61,10 +63,10 @@ namespace authserver.Controllers
                 var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
                 var authProperties = new AuthenticationProperties
                 {
-
+                    IsPersistent = true
                 };
-
-                await HttpContext.SignInAsync(new ClaimsPrincipal(claimsIdentity));
+                
+                await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(claimsIdentity), authProperties);
                 return Ok(new { success = true });
             }
             else
@@ -74,14 +76,14 @@ namespace authserver.Controllers
 
         }
 
-        [HttpGet("~/api/logout")]
-        public IActionResult Logout()
-        {
-            HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            return Ok(new { success = true });
-        }
+        //[HttpGet("logout")]
+        //public IActionResult Logout()
+        //{
+        //    HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        //    return Ok(new { success = true });
+        //}
 
-        [HttpPost("~/api/register")]
+        [HttpPost("register")]
         [AllowAnonymous]
         public IActionResult Register([FromBody] UserModel user)
         {
@@ -117,7 +119,7 @@ namespace authserver.Controllers
             return BadRequest();
         }
 
-        [HttpGet("~/api/test")]
+        [HttpGet("test")]
         [Authorize]
         public IActionResult GetUser([FromQuery] string email)
         {
